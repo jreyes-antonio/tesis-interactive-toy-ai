@@ -1,0 +1,32 @@
+# Entornos virtuales
+venv/
+env/
+.env
+
+# PyTorch y Python
+__pycache__/
+*.pyc
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Datasets e imágenes (Es recomendable no subirlos a Github por su peso)
+data/
+!data/**/.gitkeep
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Modelos (muy pesados para github)
+*.pt
+*.pth
+*.onnx
+
+# SO
+.DS_Store
+Thumbs.db
