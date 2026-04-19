@@ -107,7 +107,7 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"      -> Entrenando usando: {device.type.upper()}")
     
-    model = models.mobilenet_v2(pretrained=True)
+    model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT)
     
     # Congelar o fijar el "cerebro principal" para que no olvide cómo ver líneas y formas generales
     for param in model.parameters():

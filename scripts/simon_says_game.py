@@ -1,14 +1,12 @@
 import os
 import time
 import random
-import threading
 import urllib.request
 import numpy as np
 import cv2
 import torch
 import torch.nn as nn
 from torchvision import transforms, models
-import pyttsx3
 
 # Configuración
 STREAM_URL = "http://192.168.31.106:81/stream"
@@ -25,31 +23,18 @@ def get_valid_classes():
     valid_classes.sort()
     return valid_classes
 
-# Inicializar motor de voz
-try:
-    engine = pyttsx3.init()
-    # Ajustar para voz en español (si está instalada en Windows)
-    voices = engine.getProperty('voices')
-    for voice in voices:
-        if "es" in voice.id.lower() or "spanish" in voice.name.lower():
-            engine.setProperty('voice', voice.id)
-            break
-except:
-    engine = None
-
+# Motor de voz nativo en Windows 
+# (PyTTSx3 interrumpe hilos causando el RuntimeError de "run loop already started")
 def speak(text):
-    if engine is None: return
-    def run_speech():
-        engine.say(text)
-        engine.runAndWait()
-    # Usamos hilos para que el juego no se congele mientras la computadora habla
-    threading.Thread(target=run_speech).start()
+    import subprocess
+    cmd = f'powershell -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Speak(\'{text}\')"'
+    subprocess.Popen(cmd, shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
 
 def load_ai_model(classes):
     print("Cargando el cerebro neuronal (MobileNetV2)...")
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # Cargamos la estructura
-    model = models.mobilenet_v2(pretrained=False)
+    model = models.mobilenet_v2(weights=None)
     num_ftrs = model.classifier[1].in_features
     # Adaptamos la última capa al número de colores que leyó válidos
     model.classifier[1] = nn.Linear(num_ftrs, len(classes))
@@ -91,6 +76,7 @@ def main():
     # Motor de estados lógicos
     target_color = random.choice(classes)
     score = 0
+    max_score = 3
     state = "INICIAR"
     frames_in_state = 0
     
@@ -137,7 +123,7 @@ def main():
                     # Panel HUD Izquierdo
                     cv2.putText(frame, f"IA Ve: {predicted_color.upper()}", (10, 30), font, 0.8, (255, 255, 0), 2)
                     cv2.putText(frame, f"Certeza: {prob_percent:.1f}%", (10, 60), font, 0.6, (200, 200, 200), 1)
-                    cv2.putText(frame, f"Puntos: {score}", (10, h - 20), font, 0.9, (0, 255, 255), 2)
+                    cv2.putText(frame, f"Puntos: {score}/{max_score}", (10, h - 20), font, 0.9, (0, 255, 255), 2)
                     
                     # Máquina de estados del flujo de juego
                     if state == "NUEVA_RONDA":
@@ -151,11 +137,11 @@ def main():
                     elif state == "JUGANDO":
                         cv2.putText(frame, f"OBJETIVO: {target_color.upper()}", (cx - 110, cy - 165), font, 0.8, (0, 0, 255), 2)
                         
-                        # Debe de atinar al color pedido con una confianza altísima (>85%)
-                        if predicted_color == target_color and prob_percent > 85.0:
+                        # Disminuimos ligeramente el umbral de certeza a 75%
+                        if predicted_color == target_color and prob_percent > 75.0:
                             frames_in_state += 1
-                            # Exigimos que la IA perciba el objeto al menos 10 fotogramas continuos para evitar falsos "parpadeos"
-                            if frames_in_state > 10: 
+                            # Exigimos menos fotogramas continuos para una respuesta más rápida (de 10 a 5)
+                            if frames_in_state > 5: 
                                 score += 1
                                 msg = f"¡Excelente! Super bien hecho, eso es color {target_color}."
                                 print(msg)
@@ -163,14 +149,26 @@ def main():
                                 state = "ACIERTO"
                                 frames_in_state = 0
                         else:
-                            # Castigamos reiniciar el contador si mueve el objeto fuera de la lente
                             frames_in_state = 0 
                             
                     elif state == "ACIERTO":
                         cv2.putText(frame, "¡CORRECTO!", (cx - 90, cy), font, 1.2, (0, 255, 0), 3)
                         frames_in_state += 1
-                        if frames_in_state > 60: # Pausa visual de unos fotogramas (aprox. 3 a 5 seg de delay de festejo)
-                            state = "NUEVA_RONDA"
+                        if frames_in_state > 60: # Pausa visual para ver el "Correcto"
+                            if score >= max_score:
+                                state = "FIN_JUEGO"
+                                frames_in_state = 0
+                            else:
+                                state = "NUEVA_RONDA"
+                    
+                    elif state == "FIN_JUEGO":
+                        cv2.putText(frame, "¡JUEGO TERMINADO!", (cx - 140, cy), font, 1.2, (255, 0, 255), 3)
+                        cv2.putText(frame, "Ganaste todas las rondas", (cx - 130, cy + 50), font, 0.8, (255, 255, 255), 2)
+                        if frames_in_state == 0:
+                            msg = "Felicitaciones, ganaste mi juego de 3 rondas. Gracias por jugar."
+                            print(f"JUEGO: {msg}")
+                            speak(msg)
+                            frames_in_state += 1
 
                     cv2.imshow("Cerebro CNN - Simon Dice (Presiona 'q' para salir)", frame)
                     if cv2.waitKey(1) & 0xFF == ord('q'):
