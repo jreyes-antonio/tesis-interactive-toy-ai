@@ -30,3 +30,7 @@ data/
 # SO
 .DS_Store
 Thumbs.db
+
+# Credenciales de red (Seguridad)
+wifi_credentials.h
+
