@@ -23,7 +23,6 @@ def main():
     # 1. Definir cómo la IA verá y modificará las fotos antes de estudiar (Data Augmentation)
     data_transforms = {
         'train': transforms.Compose([
-            transforms.ToPILImage(), # Asegura formato correcto si usamos lectura raw
             transforms.Resize((224, 224)),
             transforms.RandomHorizontalFlip(), # Giramos un poco las fotos para variedad
             transforms.RandomRotation(15),     # Pequeñas rotaciones
@@ -31,7 +30,6 @@ def main():
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) # Normalización estándar de ImageNet
         ]),
         'val': transforms.Compose([
-            transforms.ToPILImage(),
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
