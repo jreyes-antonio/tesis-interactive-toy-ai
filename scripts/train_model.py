@@ -65,15 +65,17 @@ def main():
         print("Asegúrate de recolectar también tu clase 'fondo' (importantísimo).")
         return
 
-    # Usar ImageFolder genérico y manipular índices
-    full_dataset = datasets.ImageFolder(root=DATA_DIR)
+    # Usar un custom loader que fuerza a PyTorch a ni siquiera mirar las carpetas inválidas/vacías
+    class FilteredImageFolder(datasets.ImageFolder):
+        def find_classes(self, directory):
+            valid_classes.sort()
+            class_to_idx = {cls_name: i for i, cls_name in enumerate(valid_classes)}
+            return valid_classes, class_to_idx
+
+    full_dataset = FilteredImageFolder(root=DATA_DIR)
     
-    # Filtrar solo índices cuyo "class index" pertenezca a las válidas
-    valid_idx = []
-    for idx, (path, label_idx) in enumerate(full_dataset.samples):
-        label_name = full_dataset.classes[label_idx]
-        if label_name in valid_classes:
-            valid_idx.append(idx)
+    # Todos los índices cargados ahora son enteramente válidos y pre-filtrados
+    valid_idx = list(range(len(full_dataset)))
 
     # 3. Separación de Datos (75% entrenar, 25% poner a prueba/examen)
     train_idx, val_idx = train_test_split(valid_idx, test_size=0.25, random_state=42)
