@@ -8,8 +8,9 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 
 # Configuración
-DATA_DIR = '../data/raw'
-MODEL_SAVE_PATH = '../models/color_classifier.pth'
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, '..', 'data', 'raw')
+MODEL_SAVE_PATH = os.path.join(SCRIPT_DIR, '..', 'models', 'color_classifier.pth')
 MIN_IMAGES_REQUIRED = 30 # Ignorar folders con menos fotos para evitar colapsos
 BATCH_SIZE = 16
 EPOCHS = 10
