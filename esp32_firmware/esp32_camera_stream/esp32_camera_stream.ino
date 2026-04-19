@@ -73,6 +73,15 @@ void setup() {
     return;
   }
 
+  // Configuración de IP ESTÁTICA
+  IPAddress local_IP(192, 168, 31, 106); // La IP que quieres dejar fija
+  IPAddress gateway(192, 168, 31, 1);    // La IP de tu router
+  IPAddress subnet(255, 255, 255, 0);
+  
+  if (!WiFi.config(local_IP, gateway, subnet)) {
+    Serial.println("Fallo al configurar la IP estática");
+  }
+
   // Conexión al Wi-Fi usando la configuración del archivo externo y seguro
   WiFi.begin(ssid, password);
   Serial.println("Conectando al Wi-Fi...");
