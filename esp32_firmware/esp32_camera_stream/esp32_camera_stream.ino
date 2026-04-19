@@ -1,5 +1,6 @@
 #include "esp_camera.h"
 #include <WiFi.h>
+#include <ESPmDNS.h>
 #include "wifi_credentials.h" // Importamos tus credenciales seguras
 
 // ==========================================
@@ -82,14 +83,24 @@ void setup() {
   Serial.println("");
   Serial.println("¡Completado! Wi-Fi conectado");
 
+  // Iniciar el servicio mDNS
+  if (!MDNS.begin("tesis-camara")) {
+    Serial.println("Advertencia: No se pudo iniciar el servicio mDNS.");
+  } else {
+    Serial.println("Servicio mDNS iniciado correctamente.");
+    MDNS.addService("http", "tcp", 81); // Opcional, ayuda a descubrir el servicio
+  }
+
   // Iniciar el servidor
   startCameraServer();
 
-  Serial.print("Servidor de Streaming levantado.\n");
-  Serial.print("Usa tu cámara visualizando en el navegador en la siguiente dirección: ");
-  Serial.print("http://");
+  Serial.println("\nServidor de Streaming levantado.");
+  Serial.println("============ ENLACES DE ACCESO ============");
+  Serial.print("Opción 1 (IP Directa): http://");
   Serial.print(WiFi.localIP());
   Serial.println(":81/stream");
+  Serial.println("Opción 2 (Dominio mDNS): http://tesis-camara.local:81/stream");
+  Serial.println("===========================================\n");
 }
 
 void loop() {
