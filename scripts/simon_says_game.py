@@ -7,12 +7,14 @@ import cv2
 import torch
 import torch.nn as nn
 from torchvision import transforms, models
+import pygame
 
 # Configuración
 STREAM_URL = "http://192.168.31.106:81/stream"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, '..', 'data', 'raw')
 MODEL_PATH = os.path.join(SCRIPT_DIR, '..', 'models', 'color_classifier.pth')
+AUDIO_DIR = os.path.join(SCRIPT_DIR, '..', 'assets', 'audio')
 
 def get_valid_classes():
     valid_classes = []
@@ -23,25 +25,25 @@ def get_valid_classes():
     valid_classes.sort()
     return valid_classes
 
-# Motor de voz nativo en Windows 
-# (PyTTSx3 interrumpe hilos causando el RuntimeError de "run loop already started")
-def speak(text):
-    import subprocess
-    cmd = f'powershell -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Speak(\'{text}\')"'
-    subprocess.Popen(cmd, shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+# Motor de Reproducción de MP3 Fijos (Alta velocidad, Cero lag)
+pygame.mixer.init()
+def play_audio(filename):
+    audio_path = os.path.join(AUDIO_DIR, f"{filename}.mp3")
+    if os.path.exists(audio_path):
+        pygame.mixer.music.load(audio_path)
+        pygame.mixer.music.play()
+    else:
+        print(f"Advertencia: No se encontró el archivo de audio '{filename}.mp3'")
 
 def load_ai_model(classes):
     print("Cargando el cerebro neuronal (MobileNetV2)...")
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # Cargamos la estructura
     model = models.mobilenet_v2(weights=None)
     num_ftrs = model.classifier[1].in_features
-    # Adaptamos la última capa al número de colores que leyó válidos
     model.classifier[1] = nn.Linear(num_ftrs, len(classes))
-    # Inyectamos los pesos matemáticos
     model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
     model = model.to(device)
-    model.eval() # Modo evaluación (Inferencia pura)
+    model.eval()
     return model, device
 
 def main():
@@ -56,9 +58,8 @@ def main():
         
     model, device = load_ai_model(classes)
     
-    # Mismo pipeline exacto usado en el entrenamiento (sin aumento de datos)
     transform = transforms.Compose([
-        transforms.ToPILImage(), # Conversor raw a PIL
+        transforms.ToPILImage(),
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -80,8 +81,8 @@ def main():
     state = "INICIAR"
     frames_in_state = 0
     
-    speak("Bienvenido a Simón Dice Inteligente. Vamos a jugar un rato.")
-    time.sleep(2)
+    play_audio("bienvenida")
+    time.sleep(3)
     state = "NUEVA_RONDA"
     font = cv2.FONT_HERSHEY_SIMPLEX
     
@@ -99,16 +100,11 @@ def main():
                 if frame is not None:
                     h, w = frame.shape[:2]
                     cx, cy = w//2, h//2
-                    box_size = 150 # Área de escaneo de 300x300 en el medio
+                    box_size = 150 
                     
-                    # Dibujar cuadro visor para el usuario
                     cv2.rectangle(frame, (cx-box_size, cy-box_size), (cx+box_size, cy+box_size), (0, 255, 0), 2)
-                    
-                    # Recortar zona interior (Aísla ruido externo)
                     roi = frame[cy-box_size:cy+box_size, cx-box_size:cx+box_size]
                     
-                    # PREDICCIÓN CON INTELIGENCIA ARTIFICIAL
-                    # cvtColor arregla el factor de color entre OpenCV (BGR) a PyTorch (RGB)
                     tensor_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
                     input_tensor = transform(tensor_rgb).unsqueeze(0).to(device)
                     
@@ -120,32 +116,26 @@ def main():
                         predicted_color = classes[predicted.item()]
                         prob_percent = max_prob.item() * 100
                         
-                    # Panel HUD Izquierdo
                     cv2.putText(frame, f"IA Ve: {predicted_color.upper()}", (10, 30), font, 0.8, (255, 255, 0), 2)
                     cv2.putText(frame, f"Certeza: {prob_percent:.1f}%", (10, 60), font, 0.6, (200, 200, 200), 1)
                     cv2.putText(frame, f"Puntos: {score}/{max_score}", (10, h - 20), font, 0.9, (0, 255, 255), 2)
                     
-                    # Máquina de estados del flujo de juego
                     if state == "NUEVA_RONDA":
                         target_color = random.choice(classes)
-                        msg = f"Simon dice, muestrame algo de color {target_color}"
-                        print(f"JUEGO: {msg}")
-                        speak(msg)
+                        print(f"JUEGO: Busca el color {target_color}")
+                        play_audio(f"buscar_{target_color}")
                         frames_in_state = 0
                         state = "JUGANDO"
                         
                     elif state == "JUGANDO":
                         cv2.putText(frame, f"OBJETIVO: {target_color.upper()}", (cx - 110, cy - 165), font, 0.8, (0, 0, 255), 2)
                         
-                        # Disminuimos ligeramente el umbral de certeza a 75%
                         if predicted_color == target_color and prob_percent > 75.0:
                             frames_in_state += 1
-                            # Exigimos menos fotogramas continuos para una respuesta más rápida (de 10 a 5)
                             if frames_in_state > 5: 
                                 score += 1
-                                msg = f"¡Excelente! Super bien hecho, eso es color {target_color}."
-                                print(msg)
-                                speak(msg)
+                                print(f"¡Excelente! Super bien hecho, eso es color {target_color}.")
+                                play_audio("correcto")
                                 state = "ACIERTO"
                                 frames_in_state = 0
                         else:
@@ -154,7 +144,7 @@ def main():
                     elif state == "ACIERTO":
                         cv2.putText(frame, "¡CORRECTO!", (cx - 90, cy), font, 1.2, (0, 255, 0), 3)
                         frames_in_state += 1
-                        if frames_in_state > 60: # Pausa visual para ver el "Correcto"
+                        if frames_in_state > 60: 
                             if score >= max_score:
                                 state = "FIN_JUEGO"
                                 frames_in_state = 0
@@ -165,9 +155,8 @@ def main():
                         cv2.putText(frame, "¡JUEGO TERMINADO!", (cx - 140, cy), font, 1.2, (255, 0, 255), 3)
                         cv2.putText(frame, "Ganaste todas las rondas", (cx - 130, cy + 50), font, 0.8, (255, 255, 255), 2)
                         if frames_in_state == 0:
-                            msg = "Felicitaciones, ganaste mi juego de 3 rondas. Gracias por jugar."
-                            print(f"JUEGO: {msg}")
-                            speak(msg)
+                            print(f"JUEGO: Felicitaciones, ganaste.")
+                            play_audio("fin_juego")
                             frames_in_state += 1
 
                     cv2.imshow("Cerebro CNN - Simon Dice (Presiona 'q' para salir)", frame)
