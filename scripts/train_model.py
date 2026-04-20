@@ -11,6 +11,7 @@ import numpy as np
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, '..', 'data', 'raw')
 MODEL_SAVE_PATH = os.path.join(SCRIPT_DIR, '..', 'models', 'color_classifier.pth')
+HISTORY_SAVE_PATH = os.path.join(SCRIPT_DIR, '..', 'models', 'training_history.json')
 MIN_IMAGES_REQUIRED = 30 # Ignorar folders con menos fotos para evitar colapsos
 BATCH_SIZE = 16
 EPOCHS = 10
@@ -122,6 +123,9 @@ def main():
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.classifier.parameters(), lr=0.001)
 
+    # Registro de métricas para Jupyter Notebook (Tesis)
+    history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []}
+
     # 5. El Bucle Escolar (Entrenamiento Cíclico)
     print("\n[4/5] Arrancando los ciclos de aprendizaje...")
     for epoch in range(EPOCHS):
@@ -165,13 +169,25 @@ def main():
                 
         val_acc = val_corrects.double() / len(val_dataset)
         
+        # Archivar historia
+        history['train_loss'].append(epoch_loss)
+        history['train_acc'].append(epoch_acc.item() * 100)
+        history['val_loss'].append(val_loss / len(val_dataset))
+        history['val_acc'].append(val_acc.item() * 100)
+        
         print(f" - Época {epoch+1}/{EPOCHS} -> Precisión Examen: {val_acc*100:.1f}%")
 
     # 6. Embalaje
-    print("\n[5/5] ¡Entrenamiento completado! Guardando archivo de cerebro en disco...")
+    print("\n[5/5] ¡Entrenamiento completado! Guardando cerebro en disco...")
+    
+    import json
+    with open(HISTORY_SAVE_PATH, 'w') as f:
+        json.dump(history, f)
+        
     torch.save(model.state_dict(), MODEL_SAVE_PATH)
-    print(f" -> Modelo guardado en {MODEL_SAVE_PATH}")
-    print("LISTO. Ya podemos empezar a programar la lógica del juego Simón Dice.")
+    print(f" -> Modelo guardado en {os.path.basename(MODEL_SAVE_PATH)}")
+    print(f" -> Telemetría guardada en {os.path.basename(HISTORY_SAVE_PATH)}")
+    print("LISTO. Ya podemos abrir el Jupyter Notebook analítico.")
 
 if __name__ == '__main__':
     main()
